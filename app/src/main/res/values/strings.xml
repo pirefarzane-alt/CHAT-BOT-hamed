@@ -1,0 +1,44 @@
+<resources>
+    <string name="app_name">حامد</string>
+    <string name="app_subtitle">دستیار هوشمند و رفیق فارسی‌زبان شما</string>
+    <string name="app_version">نسخه ۱.۰</string>
+
+    <!-- Personas -->
+    <string name="persona_keyvan_name">استاد کیوان</string>
+    <string name="persona_keyvan_title">ادیب، باوقار و اهل شعر</string>
+    <string name="persona_arash_name">آرش</string>
+    <string name="persona_arash_title">شوخ‌طبع، رفیق صمیمی و خودمانی</string>
+    <string name="persona_mahtab_name">مهتاب</string>
+    <string name="persona_mahtab_title">شنوای صبور، مهربان و آرامش‌بخش</string>
+    <string name="persona_niloufar_name">نیلوفر</string>
+    <string name="persona_niloufar_title">دقیق، جدی و فنی (برنامه‌نویسی و پژوهش)</string>
+
+    <!-- Chat UI -->
+    <string name="type_message_hint">پیام خود را بنویسید…</string>
+    <string name="send_message">ارسال</string>
+    <string name="empty_chat_title">گفتگو با حامد را آغاز کنید</string>
+    <string name="empty_chat_desc">یکی از چهار شخصیت همراه را انتخاب کنید و درباره هر موضوعی به زبان پارسی گفتگو نمایید.</string>
+    <string name="clear_chat">پاک‌سازی گفتگو</string>
+    <string name="clear_chat_dialog_title">پاک کردن تمام پیام‌ها؟</string>
+    <string name="clear_chat_dialog_message">آیا مطمئن هستید که می‌خواهید تاریخچه گفتگو را پاک کنید؟ این عملیات قابل بازگشت نیست.</string>
+    <string name="clear_chat_confirm">پاک‌سازی</string>
+    <string name="cancel">انصراف</string>
+    <string name="about_app">درباره حامد</string>
+    <string name="close">بستن</string>
+    <string name="copied_to_clipboard">پیام در کلیپ‌بورد کپی شد</string>
+    <string name="copy">کپی</string>
+    <string name="select_persona">انتخاب هم‌صحبت</string>
+    <string name="typing_indicator">در حال اندیشیدن و پاسخ…</string>
+    <string name="retry">تلاش دوباره</string>
+
+    <!-- Errors -->
+    <string name="error_network">خطا در برقراری ارتباط با اینترنت. لطفاً اتصال شبکه خود را بررسی فرمایید.</string>
+    <string name="error_api_key_missing">کلید ارتباط با هوش مصنوعی (API Key) یافت نشد. لطفاً تنظیمات محیطی را بررسی کنید.</string>
+    <string name="error_quota_exceeded">محدودیت درخواست هوش مصنوعی تکمیل شده است. لطفاً چند لحظه بعد تلاش کنید.</string>
+    <string name="error_server">پاسخی از سرور دریافت نشد یا سرور با مشکل مواجه است. لطفاً دوباره امتحان کنید.</string>
+    <string name="error_unknown">متأسفانه خطایی در پردازش پیام رخ داد. لطفاً دوباره تلاش نمایید.</string>
+
+    <!-- About Screen -->
+    <string name="about_description">«حامد» یک دستیار هوشمند و شخصی به زبان فارسی است که با بهره‌گیری از مدل‌های پیشرفته هوش مصنوعی (Gemini) و طراحی مدرن بر پایه Jetpack Compose توسعه داده شده است. حامد با چهار شخصیت منحصر‌به‌فرد، افزون بر همراهی در برنامه‌نویسی، مطالعه، ترجمه و امور روزمره، جایگاه ویژه‌ای برای ادب، شعر و فرهنگ کهن ایران قائل است.</string>
+    <string name="about_credit">طراحی و پیاده‌سازی مرحله ۱ • نسخه ۱.۰</string>
+</resources>

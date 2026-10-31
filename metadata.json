@@ -1,0 +1,6 @@
+{
+  "name": "حامد",
+  "description": "دستیار هوشمند فارسی با ۴ شخصیت متمایز (استاد کیوان، آرش، مهتاب، نیلوفر) و عشق به ادب و فرهنگ ایران",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
