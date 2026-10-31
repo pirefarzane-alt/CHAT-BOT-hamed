@@ -88,7 +88,7 @@ fun AboutDialog(
                     modifier = Modifier.padding(top = 4.dp)
                 ) {
                     Text(
-                        text = stringResource(R.string.app_version),
+                        text = stringResource(R.string.app_version_display),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -170,11 +170,12 @@ fun AboutDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = stringResource(R.string.about_credit),
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        textAlign = TextAlign.Center
+                    text = "«" + stringResource(R.string.about_credit) + "»",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
