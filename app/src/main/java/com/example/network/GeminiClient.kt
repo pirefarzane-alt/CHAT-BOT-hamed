@@ -33,9 +33,8 @@ class GeminiClient {
 
     // Current models list in order of fallback
     private val candidateModels = listOf(
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash"
+        "gemini-3.8-flash",
+        "gemini-3.5-flash-lite"
     )
 
     suspend fun generateReply(
@@ -77,13 +76,14 @@ class GeminiClient {
             SystemInstruction(parts = listOf(Part(text = systemInstructionText)))
         } else null
 
+        val failedAttempts = mutableListOf<String>()
         var lastErrorMessage = "خطا در برقراری ارتباط با مدل هوش مصنوعی."
 
         // Attempt with available models in order of capability
         for (model in candidateModels) {
             try {
-                // Ensure thinkingConfig is sent ONLY to models that support it (2.5+),
-                // so fallback models (like 2.0-flash or 1.5-flash) do not receive an unsupported parameter
+                // Ensure thinkingConfig is sent ONLY to models that support it (2.5+ / 3.x),
+                // so models that do not support it do not receive an unsupported parameter
                 val supportsThinking = model.startsWith("gemini-2.5") || model.startsWith("gemini-3")
                 val thinkingConfig = if (supportsThinking) ThinkingConfig(thinkingBudget = 1024) else null
 
@@ -138,24 +138,38 @@ class GeminiClient {
                     val errorBody = response.errorBody()?.string().orEmpty()
                     Log.w("GeminiClient", "Model $model returned HTTP $code: $errorBody")
 
+                    val desc = when (code) {
+                        404 -> "مدل پیدا نشد"
+                        429 -> "محدودیت تعداد درخواست"
+                        503 -> "شلوغی سرور"
+                        504 -> "پایان زمان سرور"
+                        else -> "پاسخ ناموفق"
+                    }
+                    failedAttempts.add("• $model — کد $code ($desc)")
+
                     when (code) {
                         429 -> {
+                            val previousInfo = if (failedAttempts.size > 1) {
+                                "\n\nتلاش‌های قبلی:\n" + failedAttempts.dropLast(1).joinToString("\n")
+                            } else ""
                             return Result.failure(
-                                IllegalStateException("محدودیت تعداد درخواست‌های هوش مصنوعی برای این لحظه تکمیل شده است. لطفاً کمی صبر فرمایید.")
+                                IllegalStateException("محدودیت تعداد درخواست‌های هوش مصنوعی برای این لحظه تکمیل شده است (مدل $model — کد 429: $desc). لطفاً کمی صبر فرمایید.$previousInfo")
+                            )
+                        }
+                        400, 403 -> {
+                            val previousInfo = if (failedAttempts.size > 1) {
+                                "\n\nتلاش‌های قبلی:\n" + failedAttempts.dropLast(1).joinToString("\n")
+                            } else ""
+                            return Result.failure(
+                                IllegalStateException("دسترسی به سرویس هوش مصنوعی امکان‌پذیر نیست یا کلید ارائه‌شده معتبر نمی‌باشد (مدل $model — کد $code: $desc).$previousInfo")
                             )
                         }
                         404 -> {
                             // Model not found in this region/key, continue to next fallback model
-                            lastErrorMessage = "مدل $model در دسترس نبود."
                             continue
                         }
-                        400, 403 -> {
-                            return Result.failure(
-                                IllegalStateException("دسترسی به سرویس هوش مصنوعی امکان‌پذیر نیست یا کلید ارائه‌شده معتبر نمی‌باشد (کد خطا: $code).")
-                            )
-                        }
                         else -> {
-                            lastErrorMessage = "پاسخ ناموفق از سرور با کد $code دریافت شد."
+                            continue
                         }
                     }
                 }
@@ -178,6 +192,11 @@ class GeminiClient {
                 Log.e("GeminiClient", "Unexpected error", e)
                 lastErrorMessage = e.localizedMessage ?: "خطای ناشناخته رخ داد."
             }
+        }
+
+        if (failedAttempts.isNotEmpty()) {
+            val failureSummary = "هیچ‌کدام از مدل‌ها پاسخ ندادند:\n" + failedAttempts.joinToString("\n")
+            return Result.failure(IllegalStateException(failureSummary))
         }
 
         return Result.failure(IllegalStateException(lastErrorMessage))
