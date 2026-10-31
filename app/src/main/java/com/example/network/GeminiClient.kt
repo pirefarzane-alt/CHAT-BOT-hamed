@@ -31,6 +31,7 @@ class GeminiClient {
         .build()
         .create(GeminiApiService::class.java)
 
+    // Current models list in order of fallback
     private val candidateModels = listOf(
         "gemini-2.5-flash",
         "gemini-2.0-flash",
@@ -76,20 +77,26 @@ class GeminiClient {
             SystemInstruction(parts = listOf(Part(text = systemInstructionText)))
         } else null
 
-        val request = GeminiRequest(
-            contents = contents,
-            systemInstruction = systemInstruction,
-            generationConfig = GenerationConfig(
-                temperature = 0.7,
-                maxOutputTokens = 2048
-            )
-        )
-
         var lastErrorMessage = "خطا در برقراری ارتباط با مدل هوش مصنوعی."
 
         // Attempt with available models in order of capability
         for (model in candidateModels) {
             try {
+                // Ensure thinkingConfig is sent ONLY to models that support it (2.5+),
+                // so fallback models (like 2.0-flash or 1.5-flash) do not receive an unsupported parameter
+                val supportsThinking = model.startsWith("gemini-2.5") || model.startsWith("gemini-3")
+                val thinkingConfig = if (supportsThinking) ThinkingConfig(thinkingBudget = 1024) else null
+
+                val request = GeminiRequest(
+                    contents = contents,
+                    systemInstruction = systemInstruction,
+                    generationConfig = GenerationConfig(
+                        temperature = 0.7,
+                        maxOutputTokens = 8192,
+                        thinkingConfig = thinkingConfig
+                    )
+                )
+
                 val response = apiService.generateContent(
                     model = model,
                     apiKey = apiKey,
@@ -99,17 +106,32 @@ class GeminiClient {
                 if (response.isSuccessful) {
                     val body = response.body()
                     val candidate = body?.candidates?.firstOrNull()
-                    val replyText = candidate?.content?.parts?.firstOrNull()?.text
+                    val allParts = candidate?.content?.parts.orEmpty()
 
-                    if (!replyText.isNullOrBlank()) {
-                        return Result.success(replyText.trim())
+                    // Join the text of ALL parts of the reply, not only the first part
+                    val nonThoughtParts = allParts.filter { it.thought != true }.mapNotNull { it.text }
+                    val replyText = if (nonThoughtParts.isNotEmpty()) {
+                        nonThoughtParts.joinToString("").trim()
                     } else {
+                        allParts.mapNotNull { it.text }.joinToString("").trim()
+                    }
+
+                    // If the model stops because of MAX_TOKENS but some text exists, show that text and keep it
+                    if (replyText.isNotBlank()) {
+                        return Result.success(replyText)
+                    } else {
+                        // If reply is truly empty, show a specific Persian error message
                         val finishReason = candidate?.finishReason
-                        if (finishReason == "SAFETY") {
-                            return Result.failure(
-                                IllegalStateException("متأسفانه این پرسش با خط‌مشی‌های ایمنی مطابقت نداشت و پاسخی برای آن تولید نشد.")
-                            )
+                        val specificErrorMessage = when (finishReason) {
+                            "MAX_TOKENS" -> "پاسخ بیش از حد طولانی شد و پیش از تولید متن، به سقف مجاز رسید. لطفاً پرسش را کوتاه‌تر بفرمایید."
+                            "SAFETY" -> "پاسخ به دلیل خط‌مشی‌های ایمنی هوش مصنوعی مسدود گردید و متنی برای نمایش تولید نشد."
+                            "RECITATION" -> "پاسخ به دلیل قوانین کپی‌رایت یا بازخوانی دقیق مسدود گردید."
+                            "BLOCKLIST" -> "محتوای درخواست یا پاسخ به دلیل محدودیت‌های واژگانی مسدود شد."
+                            "PROHIBITED_CONTENT" -> "محتوای پاسخ غیرمجاز تشخیص داده شد."
+                            "SPII" -> "پاسخ به دلیل حفظ حریم خصوصی و اطلاعات حساس مسدود گردید."
+                            else -> "مدل هوش مصنوعی هیچ پاسخی تولید نکرد (پاسخ دریافتی خالی بود)."
                         }
+                        return Result.failure(IllegalStateException(specificErrorMessage))
                     }
                 } else {
                     val code = response.code()

@@ -35,7 +35,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private var lastUserPrompt: String? = null
+    // Holds the failed prompt so retry can re-send without duplicate insertion in Room
+    private var lastFailedPrompt: String? = null
 
     init {
         val database = AppDatabase.getDatabase(application)
@@ -69,12 +70,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _inputText.value = ""
         }
         _errorMessage.value = null
-        lastUserPrompt = promptToSend
+        lastFailedPrompt = null
 
         val activePersona = _currentPersona.value
 
         viewModelScope.launch {
-            // 1. Save user message to Room
+            // 1. Save user message to Room (once)
             repository.saveMessage(
                 content = promptToSend,
                 isUser = true,
@@ -84,8 +85,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _isLoading.value = true
 
             // 2. Fetch conversation history for context
-            val recentEntities = repository.getRecentMessages(limit = 12)
-            // exclude the message we just inserted so it's not duplicated in prompt
+            val recentEntities = repository.getRecentMessages(limit = 14)
+            // Exclude the user message we just inserted so it's not duplicated in history context
             val historyPairs = recentEntities
                 .dropLast(1)
                 .map { it.content to it.isUser }
@@ -106,7 +107,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     isUser = false,
                     personaId = activePersona.id
                 )
+                lastFailedPrompt = null
             }.onFailure { throwable ->
+                // Record the failed prompt so Retry can re-send without re-saving to Room
+                lastFailedPrompt = promptToSend
                 _errorMessage.value = throwable.localizedMessage
                     ?: "خطای ناشناخته رخ داده است. لطفاً دوباره امتحان کنید."
             }
@@ -114,10 +118,46 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun retryLastMessage() {
-        val prompt = lastUserPrompt
-        if (!prompt.isNullOrBlank()) {
-            _errorMessage.value = null
-            sendMessage(prompt)
+        val promptToRetry = lastFailedPrompt
+        // If there is no failed request or already loading, do nothing
+        if (promptToRetry.isNullOrBlank() || _isLoading.value || _errorMessage.value == null) {
+            return
+        }
+
+        _errorMessage.value = null
+        _isLoading.value = true
+        val activePersona = _currentPersona.value
+
+        viewModelScope.launch {
+            // Re-send the last user message to Gemini WITHOUT saving it again to Room.
+            // The user's message is already in Room from the previous attempt.
+            val recentEntities = repository.getRecentMessages(limit = 14)
+            val historyPairs = if (recentEntities.isNotEmpty() && recentEntities.last().isUser) {
+                recentEntities.dropLast(1).map { it.content to it.isUser }
+            } else {
+                recentEntities.map { it.content to it.isUser }
+            }
+
+            val result = geminiClient.generateReply(
+                conversationHistory = historyPairs,
+                currentPrompt = promptToRetry,
+                systemInstructionText = activePersona.systemInstruction
+            )
+
+            _isLoading.value = false
+
+            result.onSuccess { replyText ->
+                // Only save the model's reply if the retry succeeds
+                repository.saveMessage(
+                    content = replyText,
+                    isUser = false,
+                    personaId = activePersona.id
+                )
+                lastFailedPrompt = null
+            }.onFailure { throwable ->
+                _errorMessage.value = throwable.localizedMessage
+                    ?: "خطای ناشناخته رخ داده است. لطفاً دوباره امتحان کنید."
+            }
         }
     }
 
@@ -125,7 +165,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.clearHistory()
             _errorMessage.value = null
-            lastUserPrompt = null
+            lastFailedPrompt = null
         }
     }
 

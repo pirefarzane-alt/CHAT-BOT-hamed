@@ -23,13 +23,20 @@ data class Content(
 
 @JsonClass(generateAdapter = true)
 data class Part(
-    @field:Json(name = "text") val text: String
+    @field:Json(name = "text") val text: String? = null,
+    @field:Json(name = "thought") val thought: Boolean? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ThinkingConfig(
+    @field:Json(name = "thinkingBudget") val thinkingBudget: Int = 1024
 )
 
 @JsonClass(generateAdapter = true)
 data class GenerationConfig(
     @field:Json(name = "temperature") val temperature: Double = 0.7,
-    @field:Json(name = "maxOutputTokens") val maxOutputTokens: Int = 2048
+    @field:Json(name = "maxOutputTokens") val maxOutputTokens: Int = 8192,
+    @field:Json(name = "thinkingConfig") val thinkingConfig: ThinkingConfig? = null
 )
 
 @JsonClass(generateAdapter = true)
