@@ -4,10 +4,12 @@ import android.util.Log
 import com.example.BuildConfig
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.CancellationException
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
@@ -19,9 +21,10 @@ class GeminiClient {
         .build()
 
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(45, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(45, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(35, TimeUnit.SECONDS)
         .build()
 
     private val apiService: GeminiApiService = Retrofit.Builder()
@@ -33,8 +36,8 @@ class GeminiClient {
 
     // Current models list in order of fallback
     private val candidateModels = listOf(
-        "gemini-3.8-flash",
-        "gemini-3.5-flash-lite"
+        "gemini-3.5-flash-lite",
+        "gemini-3.8-flash"
     )
 
     suspend fun generateReply(
@@ -76,27 +79,21 @@ class GeminiClient {
             SystemInstruction(parts = listOf(Part(text = systemInstructionText)))
         } else null
 
+        val request = GeminiRequest(
+            contents = contents,
+            systemInstruction = systemInstruction,
+            generationConfig = GenerationConfig(
+                temperature = 0.7,
+                maxOutputTokens = 8192
+            )
+        )
+
         val failedAttempts = mutableListOf<String>()
-        var lastErrorMessage = "خطا در برقراری ارتباط با مدل هوش مصنوعی."
+        val lastErrorMessage = "خطا در برقراری ارتباط با مدل هوش مصنوعی."
 
         // Attempt with available models in order of capability
         for (model in candidateModels) {
             try {
-                // Ensure thinkingConfig is sent ONLY to models that support it (2.5+ / 3.x),
-                // so models that do not support it do not receive an unsupported parameter
-                val supportsThinking = model.startsWith("gemini-2.5") || model.startsWith("gemini-3")
-                val thinkingConfig = if (supportsThinking) ThinkingConfig(thinkingBudget = 1024) else null
-
-                val request = GeminiRequest(
-                    contents = contents,
-                    systemInstruction = systemInstruction,
-                    generationConfig = GenerationConfig(
-                        temperature = 0.7,
-                        maxOutputTokens = 8192,
-                        thinkingConfig = thinkingConfig
-                    )
-                )
-
                 val response = apiService.generateContent(
                     model = model,
                     apiKey = apiKey,
@@ -138,59 +135,51 @@ class GeminiClient {
                     val errorBody = response.errorBody()?.string().orEmpty()
                     Log.w("GeminiClient", "Model $model returned HTTP $code: $errorBody")
 
-                    val desc = when (code) {
-                        404 -> "مدل پیدا نشد"
-                        429 -> "محدودیت تعداد درخواست"
-                        503 -> "شلوغی سرور"
-                        504 -> "پایان زمان سرور"
+                    val desc = when {
+                        code == 404 -> "مدل پیدا نشد"
+                        code == 429 -> "محدودیت تعداد درخواست"
+                        code == 503 -> "شلوغی سرور"
+                        code == 504 -> "پایان زمان سرور"
+                        code in 500..599 -> "خطای سرور"
                         else -> "پاسخ ناموفق"
                     }
                     failedAttempts.add("• $model — کد $code ($desc)")
 
-                    when (code) {
-                        429 -> {
-                            val previousInfo = if (failedAttempts.size > 1) {
-                                "\n\nتلاش‌های قبلی:\n" + failedAttempts.dropLast(1).joinToString("\n")
-                            } else ""
-                            return Result.failure(
-                                IllegalStateException("محدودیت تعداد درخواست‌های هوش مصنوعی برای این لحظه تکمیل شده است (مدل $model — کد 429: $desc). لطفاً کمی صبر فرمایید.$previousInfo")
-                            )
-                        }
-                        400, 403 -> {
-                            val previousInfo = if (failedAttempts.size > 1) {
-                                "\n\nتلاش‌های قبلی:\n" + failedAttempts.dropLast(1).joinToString("\n")
-                            } else ""
-                            return Result.failure(
-                                IllegalStateException("دسترسی به سرویس هوش مصنوعی امکان‌پذیر نیست یا کلید ارائه‌شده معتبر نمی‌باشد (مدل $model — کد $code: $desc).$previousInfo")
-                            )
-                        }
-                        404 -> {
-                            // Model not found in this region/key, continue to next fallback model
-                            continue
-                        }
-                        else -> {
-                            continue
-                        }
+                    // Early exit only for 400 and 403 (invalid key / client error)
+                    if (code == 400 || code == 403) {
+                        val previousInfo = if (failedAttempts.size > 1) {
+                            "\n\nتلاش‌های قبلی:\n" + failedAttempts.dropLast(1).joinToString("\n")
+                        } else ""
+                        return Result.failure(
+                            IllegalStateException("دسترسی به سرویس هوش مصنوعی امکان‌پذیر نیست یا کلید ارائه‌شده معتبر نمی‌باشد (مدل $model — کد $code: $desc).$previousInfo")
+                        )
                     }
+
+                    // For 404, 429, 5xx and other status codes, continue to the next model
+                    continue
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: UnknownHostException) {
-                Log.e("GeminiClient", "Unknown host", e)
-                return Result.failure(
-                    IOException("عدم دسترسی به اینترنت. لطفاً اتصال شبکه خود را بررسی کرده و مجدداً تلاش کنید.")
-                )
+                Log.e("GeminiClient", "Unknown host on model $model", e)
+                failedAttempts.add("• $model — عدم دسترسی به اینترنت یا DNS")
+                continue
             } catch (e: SocketTimeoutException) {
-                Log.e("GeminiClient", "Timeout", e)
-                return Result.failure(
-                    IOException("زمان پاسخگویی سرور به پایان رسید. لطفاً مجدداً امتحان نمایید.")
-                )
+                Log.e("GeminiClient", "Socket timeout on model $model", e)
+                failedAttempts.add("• $model — پایان زمان انتظار")
+                continue
+            } catch (e: InterruptedIOException) {
+                Log.e("GeminiClient", "Interrupted IO on model $model", e)
+                failedAttempts.add("• $model — پایان زمان انتظار")
+                continue
             } catch (e: IOException) {
-                Log.e("GeminiClient", "IO error", e)
-                return Result.failure(
-                    IOException("خطا در انتقال داده‌های شبکه. لطفاً اتصال اینترنت را بررسی فرمایید.")
-                )
+                Log.e("GeminiClient", "IO error on model $model", e)
+                failedAttempts.add("• $model — خطای شبکه")
+                continue
             } catch (e: Exception) {
-                Log.e("GeminiClient", "Unexpected error", e)
-                lastErrorMessage = e.localizedMessage ?: "خطای ناشناخته رخ داد."
+                Log.e("GeminiClient", "Unexpected error on model $model", e)
+                failedAttempts.add("• $model — ${e.localizedMessage ?: "خطای ناشناخته"}")
+                continue
             }
         }
 
