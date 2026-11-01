@@ -34,10 +34,10 @@ class GeminiClient {
         .build()
         .create(GeminiApiService::class.java)
 
-    // Current models list in order of fallback
+    // Current models list in order of fallback (gemini-3.5-flash-lite, fallback to gemini-3.6-flash)
     private val candidateModels = listOf(
         "gemini-3.5-flash-lite",
-        "gemini-3.8-flash"
+        "gemini-3.6-flash"
     )
 
     suspend fun generateReply(

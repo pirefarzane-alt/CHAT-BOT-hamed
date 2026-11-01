@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">حامد</string>
     <string name="app_subtitle">دستیار هوشمند و رفیق فارسی‌زبان شما</string>
-    <string name="app_version">نسخه ۱.۲</string>
+    <string name="app_version">نسخه ۱.۳</string>
 
     <!-- Personas -->
     <string name="persona_keyvan_name">استاد کیوان</string>
@@ -41,5 +41,5 @@
     <!-- About Screen -->
     <string name="about_description">«حامد» یک دستیار هوشمند و شخصی به زبان فارسی است که با بهره‌گیری از مدل‌های پیشرفته هوش مصنوعی (Gemini) و طراحی مدرن بر پایه Jetpack Compose توسعه داده شده است. حامد با چهار شخصیت منحصر‌به‌فرد، افزون بر همراهی در برنامه‌نویسی، مطالعه، ترجمه و امور روزمره، جایگاه ویژه‌ای برای ادب، شعر و فرهنگ کهن ایران قائل است.</string>
     <string name="about_credit">ساخت حامی</string>
-    <string name="app_version_display">Hamed v1.2</string>
+    <string name="app_version_display">Hamed v1.3</string>
 </resources>
